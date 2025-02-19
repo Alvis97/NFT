@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createNft, mplTokenMetadata } from "@metaplex-foundation/mpl-token-metadata";
-import { generateSigner, keypairIdentity, percentAmount } from "@metaplex-foundation/umi";
+import { generateSigner, keypairIdentity, percentAmount, publicKey } from "@metaplex-foundation/umi";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { getKeypairFromEnvironment, getKeypairFromFile } from "@solana-developers/helpers";
 import { promises as fs } from "fs";
@@ -8,57 +8,53 @@ import { Connection, clusterApiUrl } from "@solana/web3.js";
 import { createGenericFile } from "@metaplex-foundation/umi";
 import { irysUploader } from "@metaplex-foundation/umi-uploader-irys";
 
+const connection = new Connection(clusterApiUrl("devnet"));
 
-const connection = new Connection(clusterApiUrl("devnet")); 
-
- 
 const umi = createUmi(clusterApiUrl("devnet"));
- 
-// load keypair from local file system
-// See https://github.com/solana-developers/helpers?tab=readme-ov-file#get-a-keypair-from-a-keypair-file
-const localKeypair = getKeypairFromEnvironment("SECRET_KEY");
- 
-// convert to Umi compatible keypair
-const umiKeypair = umi.eddsa.createKeypairFromSecretKey(localKeypair.secretKey);
- 
-// load the MPL metadata program plugin and assign a signer to our umi instance
-umi.use(keypairIdentity(umiKeypair)).use(mplTokenMetadata()).use(irysUploader());
+umi.use(mplTokenMetadata());
+umi.use(irysUploader());
 
-//Upload random image
-const imagePath = "nft-mint.png";
-const buffer = await fs.readFile(imagePath);
-let file = createGenericFile(buffer, imagePath, {
+const localKeypair = getKeypairFromEnvironment("SECRET_KEY");
+
+const umiKeypair = umi.eddsa.createKeypairFromSecretKey(localKeypair.secretKey);
+umi.use(keypairIdentity(umiKeypair));
+
+// Load the existing Collection Mint address
+const collectionMintAddress = "38NFoqobq7UbFuKwuhDQwGHTG7G1DiNzkFhd3hKzbEgg"; 
+const collectionMint = publicKey(collectionMintAddress);
+
+
+//New image for NFT
+const nftImagePath = "nft.png";
+const nftBuffer = await fs.readFile(nftImagePath);
+let nftFile = createGenericFile(nftBuffer, nftImagePath, {
     contentType: "image/jpeg",
 });
-const [image] = await umi.uploader.upload([file]); 
+const [image] = await umi.uploader.upload([nftFile]);
 
 //Create uri
-const uri = await umi.uploader.uploadJson({
-    name: "NFT Mint",
-    description: "This is my nft mint description",
+const nftUri = await umi.uploader.uploadJson({
+    name: "NFT",
+    description: "This is my nft",
     image,
-  }); 
+});
 
-console.log("Uri: ", uri);
+const nftMint = generateSigner(umi);
 
-const mint = generateSigner(umi);
-
-const { signature, result } = await createNft(umi, {
-    mint,
-    name: "My NFT Mint",
-    uri,
+const { signature: nftSignature } = await createNft(umi, {
+    mint: nftMint,
+    name: "My NFT",
+    uri: nftUri,
     updateAuthority: umi.identity.publicKey,
     sellerFeeBasisPoints: percentAmount(0),
-}).sendAndConfirm(umi, { send: { commitment: "finalized" } });
+    collection: { key: collectionMint, verified: false },
+}).sendAndConfirm(umi);
 
-
-console.log("Successfully created the NFT mint!");
-console.log("Transaction Signature: ", signature);
-const explorerUrl = `https://explorer.solana.com/address/${mint.publicKey}?cluster=devnet`;
-console.log("View NFT Mint on Solana Explorer:", explorerUrl);
-
-
-
+console.log("✅ Successfully minted NFT!");
+console.log("NFT Mint Address:", nftMint.publicKey.toString());
+console.log(
+    `View NFT on Solana Explorer: https://explorer.solana.com/address/${nftMint.publicKey}?cluster=devnet`
+);
 
 
 

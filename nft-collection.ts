@@ -24,7 +24,7 @@ const umiKeypair = umi.eddsa.createKeypairFromSecretKey(localKeypair.secretKey);
 umi.use(keypairIdentity(umiKeypair)).use(mplTokenMetadata()).use(irysUploader());
 
 //Upload random image
-const collectionImagePath = "nft-mint.png";
+const collectionImagePath = "collection.png";
 const collectionBuffer = await fs.readFile(collectionImagePath);
 let collectionFile = createGenericFile(collectionBuffer, collectionImagePath, {
     contentType: "image/jpeg",
@@ -49,6 +49,10 @@ const { signature, result } = await createNft(umi, {
     updateAuthority: umi.identity.publicKey,
     sellerFeeBasisPoints: percentAmount(0),
     isCollection: true,
+    collection: {
+        verified: false,
+        key: collectionMint.publicKey,
+    },
 }).sendAndConfirm(umi, { send: { commitment: "finalized" } });
 
 
